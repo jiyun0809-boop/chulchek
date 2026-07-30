@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
 
 :root{
@@ -353,6 +354,11 @@ i[data-lucide]{width:1em;height:1em;display:inline-block;vertical-align:-.125em}
 .ci-card.task-step,.ci-card.done-step{align-items:stretch}
 .ci-card.done-step{align-items:center}
 
+/* 구글 로그인 본인 확인 배지 */
+.who-badge{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:#0c8f68;background:rgba(18,184,134,.1);padding:8px 14px;border-radius:20px;margin-top:2px}
+.who-badge i{flex:none}
+.ci-card .google-btn{margin-top:6px}
+
 </style>
 </head>
 <body>
@@ -364,13 +370,13 @@ i[data-lucide]{width:1em;height:1em;display:inline-block;vertical-align:-.125em}
    - Firebase Realtime Database 사용 (아래 FIREBASE_CONFIG만 붙여넣으면 됨)
    ========================================================================== */
 
-/* ▼▼▼ 여기에 Firebase 설정을 붙여넣으세요 (셋업 가이드 참고) ▼▼▼ */
+/* ▼▼▼ Firebase 설정 (jiyun-c44c8 프로젝트) ▼▼▼ */
 const FIREBASE_CONFIG = {
-     apiKey: "AIzaSyDNg8Mso0txR0U3_H7PM-wFwNEDGxnhImg",
-     authDomain: "jiyun-c44c8.firebaseapp.com",
-     databaseURL: "https://jiyun-c44c8-default-rtdb.asia-southeast1.firebasedatabase.app",
-     projectId: "jiyun-c44c8",
-   };
+  apiKey: "AIzaSyDNg8Mso0txR0U3_H7PM-wFwNEDGxnhImg",
+  authDomain: "jiyun-c44c8.firebaseapp.com",
+  databaseURL: "https://jiyun-c44c8-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "jiyun-c44c8",
+};
 /* ▲▲▲ 여기까지 ▲▲▲ */
 
 const EVENTID = "chulchek-demo";
@@ -404,6 +410,7 @@ function secondsLeft(now){const w=windowOf(now);return Math.max(1,Math.ceil((ANC
 function fmt(ts){return ts==null?"—":new Date(ts).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",hour12:false});}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function ic(n){return '<i data-lucide="'+n+'"></i>';}
+function googleG(){return '<svg width="17" height="17" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.4 30.1 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.8 6.1C12.2 13.6 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9.1h12.4c-.5 2.9-2.1 5.4-4.6 7.1l7.1 5.5c4.2-3.9 6.6-9.6 6.6-16.1z"/><path fill="#FBBC05" d="M10.4 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.2.8-4.6l-7.8-6.1C1 16.3 0 20 0 24s1 7.7 2.6 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.1 0 11.3-2 15-5.5l-7.1-5.5c-2 1.3-4.5 2.1-7.9 2.1-6.4 0-11.8-4.1-13.6-9.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>';}
 function refreshIcons(){if(window.lucide&&lucide.createIcons){try{lucide.createIcons();}catch(e){}}}
 function maskPhone(p){return p?p.replace(/(\d{2,3})-(\d{3,4})-(\d{4})/,"$1-****-$3"):"—";}
 function baseUrl(){return location.origin+location.pathname;}
@@ -427,12 +434,13 @@ function realQrSvg(text, px){
 }
 
 /* ---------- Firebase 초기화 ---------- */
-let db=null, configured=false;
+let db=null, auth=null, configured=false;
 (function(){
   try{
     if(!/PASTE/.test(FIREBASE_CONFIG.apiKey) && !/PASTE/.test(FIREBASE_CONFIG.databaseURL)){
       firebase.initializeApp(FIREBASE_CONFIG);
       db = firebase.database();
+      auth = firebase.auth();
       configured = true;
     }
   }catch(e){ configured=false; }
@@ -475,19 +483,21 @@ function runOperator(){
     db.ref(DBROOT+"/submissions").on("value",s=>{ st.submissions=s.val()||{}; renderOp(); });
   }
 
-  function rosterPresent(){ return st.roster.filter(r=>st.attendance[r.empId]).length; }
+  function attVals(){ return Object.values(st.attendance); }
+  function rosterPresent(){ const v=attVals(); return st.roster.filter(r=>v.some(a=>a.empId===r.empId)).length; }
   function stats(){
     const present=Object.keys(st.attendance).length;
-    const out=Object.values(st.attendance).filter(a=>a.checkOutAt).length;
+    const out=attVals().filter(a=>a.checkOutAt).length;
     const total=st.roster.length;
     const rate=total?Math.min(100,Math.round(present/total*100)):0;
     return { present, out, total, rate, absent: Math.max(0,total-rosterPresent()) };
   }
   function opRows(){
-    const rows = st.roster.map(r=>{ const a=st.attendance[r.empId];
-      return {...r, guest:false, checkInAt:a?a.checkInAt:null, checkOutAt:a?a.checkOutAt:null}; });
-    Object.keys(st.attendance).forEach(id=>{ if(!st.roster.find(r=>r.empId===id)){ const a=st.attendance[id];
-      rows.push({empId:id,name:a.name||id,dept:"게스트",phone:"",guest:true,checkInAt:a.checkInAt,checkOutAt:a.checkOutAt}); } });
+    const v=attVals();
+    const rows = st.roster.map(r=>{ const a=v.find(x=>x.empId===r.empId);
+      return {...r, guest:false, uid:a?a.uid:null, checkInAt:a?a.checkInAt:null, checkOutAt:a?a.checkOutAt:null}; });
+    v.forEach(a=>{ if(!st.roster.find(r=>r.empId===a.empId)){
+      rows.push({empId:a.empId||"—",name:a.name||a.email||"게스트",dept:"게스트",phone:"",guest:true,uid:a.uid,checkInAt:a.checkInAt,checkOutAt:a.checkOutAt}); } });
     return rows.sort((a,b)=>(b.checkInAt||0)-(a.checkInAt||0));
   }
   function subStats(){
@@ -527,15 +537,15 @@ function runOperator(){
           '<div class="cd-text"><strong id="cdText">'+sl+'초</strong> 뒤 코드 변경<span>매 '+QR_INTERVAL+'초 회전 · 촬영본 재사용 차단</span></div></div>'+
           '<a class="preview-link" href="'+esc(url)+'" target="_blank" rel="noopener">'+ic("external-link")+' 체크인 화면 미리보기(테스트)</a>'+
         '</div></div>'+
-      '<div class="stage-foot"><div class="sf-item">'+ic("shield-check")+' 이름 + 사번 인증</div>'+
+      '<div class="stage-foot"><div class="sf-item">'+ic("shield-check")+' 구글 로그인 본인 인증</div>'+
         '<div class="sf-item">'+ic("timer-reset")+' 만료 QR 자동 거부</div>'+
-        '<div class="sf-item">'+ic("users")+' 한 사번 1회만 인증</div></div></section>';
+        '<div class="sf-item">'+ic("users")+' 한 계정 1회만 인증 (대리출석 차단)</div></div></section>';
 
     const statCard=(l,v,tone,i)=>'<div class="stat stat-'+tone+'"><div class="stat-top">'+ic(i)+' '+l+'</div><div class="stat-value">'+v+'</div></div>';
     const trows = rows.map(r=>{
       const status=r.checkInAt?(r.checkOutAt?"out":"in"):"absent";
       const label=status==="in"?(isTrain?"출석":"참석"):status==="out"?"퇴실완료":"미출석";
-      const sub=st.submissions[r.empId];
+      const sub=r.uid?st.submissions[r.uid]:null;
       const subCell=sub?'<span class="pill pill-sub">'+ic("check")+' ★'+sub.rating+(sub.quizTotal?' · '+sub.quizScore+'/'+sub.quizTotal:'')+'</span>'
         :(r.checkInAt?'<span class="pill pill-nosub">미제출</span>':'<span class="td-dash">—</span>');
       const nameCell='<div class="who"><span class="who-name">'+esc(r.name)+(r.guest?' <span class="guest-tag">게스트</span>':'')+'</span><span class="who-id">'+esc(r.empId)+'</span></div>';
@@ -544,7 +554,8 @@ function runOperator(){
         '<td><span class="pill pill-'+status+'">'+label+'</span></td><td>'+subCell+'</td></tr>';
     }).join("");
 
-    const absentRoster = st.roster.filter(r=>!st.attendance[r.empId]);
+    const attV=attVals();
+    const absentRoster = st.roster.filter(r=>!attV.some(a=>a.empId===r.empId));
     const absentBar = absentRoster.length>0 ?
       '<div class="absent-bar"><span class="ab-info">'+ic("clock")+' 명단 미출석 <strong>'+absentRoster.length+'명</strong> · 리마인드 발송</span>'+
       '<button class="btn warn" id="btnSms">'+ic("send")+' 미출석자 전체 문자</button></div>' : "";
@@ -624,7 +635,7 @@ function runOperator(){
     if(!window.XLSX){toast("error","엑셀 모듈 로드 실패.");return;}
     try{
       const rows=opRows(), isTrain=st.eventType==="training";
-      const data=rows.map(r=>{ const sub=st.submissions[r.empId];
+      const data=rows.map(r=>{ const sub=r.uid?st.submissions[r.uid]:null;
         const o={사번:r.empId,이름:r.name,부서:r.dept,상태:r.checkInAt?(r.checkOutAt?"퇴실":(isTrain?"출석":"참석")):"미"+(isTrain?"출석":"참석"),출석시각:fmt(r.checkInAt)};
         if(isTrain)o.퇴실시각=fmt(r.checkOutAt);
         o.만족도=sub?sub.rating:""; if(isTrain){o.과제제출=sub?((sub.assignment||sub.fileName)?"제출":"미제출"):"";o.퀴즈=sub?(sub.quizScore+"/"+sub.quizTotal):"";}
@@ -669,39 +680,67 @@ function runOperator(){
 }
 
 /* ============================================================================
-   체크인 앱 (관객 폰)
+   체크인 앱 (관객 폰) — 구글 로그인 인증
    ========================================================================== */
 function runCheckin(){
   const w=+params.get("w"), t=params.get("t"), mode=params.get("m")||"in", type=params.get("ty")||"training";
-  const cs = { step:"init", name:"", sabun:"", err:null, result:null,
+  const cs = { step:"init", user:null, name:"", sabun:"", err:null, result:null, submitted:null,
     task:{rating:0,comment:"",assignment:"",fileName:"",quiz:{}} };
 
-  // 토큰 검증 (스캔 시점 기준, ±1 창 허용)
   function validate(){
-    if(!configured) return "config";
     const cur=windowOf(Date.now());
     const ok = tokenCode(EVENTID+"|"+mode+"|"+w)===t;
     const fresh = Math.abs(cur-w)<=1;
-    return (ok&&fresh) ? "form" : "expired";
+    return (ok&&fresh) ? "auth" : "expired";
   }
-  cs.step = validate();
+
+  if(!configured){ cs.step="config"; render(); }
+  else {
+    auth.getRedirectResult().then(r=>{
+      if(r && r.user){ cs.user=r.user; cs.name=r.user.displayName||""; cs.step="form"; render(); }
+      else { cs.step=validate(); render(); }
+    }).catch(()=>{ cs.step=validate(); render(); });
+  }
+
+  function doLogin(){
+    cs.err=null;
+    const provider=new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).then(res=>{
+      cs.user=res.user; cs.name=res.user.displayName||""; cs.step="form"; render();
+    }).catch(err=>{
+      const code=err&&err.code;
+      if(code==="auth/popup-closed-by-user"||code==="auth/cancelled-popup-request"){ cs.err="로그인 창이 닫혔어요. 다시 시도해 주세요."; return render(); }
+      if(code==="auth/popup-blocked"||code==="auth/operation-not-supported-in-this-environment"){ auth.signInWithRedirect(provider); return; }
+      if(code==="auth/unauthorized-domain"){ cs.err="이 주소가 Firebase 승인 도메인에 없어요. 운영자에게 문의하세요."; return render(); }
+      cs.err="로그인에 실패했어요. 다시 시도해 주세요."; render();
+    });
+  }
 
   function render(){
-    const app=document.getElementById("app");
-    let inner="";
-    if(cs.step==="config"){
+    const app=document.getElementById("app"); let inner="";
+    if(cs.step==="init"){
+      inner='<div class="ci-card"><div class="ci-brand">'+ic("qr-code")+' 출첵</div><p class="ci-sub" style="margin-top:20px">'+ic("loader")+' 잠시만요...</p></div>';
+    } else if(cs.step==="config"){
       inner='<div class="ci-card"><div class="ci-ic warn">'+ic("triangle-alert")+'</div><h2>설정이 필요해요</h2>'+
-        '<p class="ci-sub">운영자가 Firebase 설정을 아직 넣지 않았어요. 셋업 가이드를 확인해 주세요.</p></div>';
+        '<p class="ci-sub">운영자가 Firebase 설정을 아직 넣지 않았어요.</p></div>';
     } else if(cs.step==="expired"){
       inner='<div class="ci-card"><div class="ci-ic expire">'+ic("timer-reset")+'</div><h2>만료된 QR이에요</h2>'+
         '<p class="ci-sub">보안을 위해 QR은 '+QR_INTERVAL+'초마다 바뀌어요. 강당 화면의 <b>최신 QR</b>을 다시 스캔해 주세요.</p>'+
         '<button class="pbtn subtle" onclick="location.reload()">'+ic("refresh-cw")+' 다시 시도</button></div>';
-    } else if(cs.step==="form"){
+    } else if(cs.step==="auth"){
       inner='<div class="ci-card"><div class="ci-brand">'+ic("qr-code")+' 출첵</div>'+
         '<div class="scanned-tag '+(mode==="in"?"st-in":"st-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석":"퇴실")+' 인증 · '+esc(t)+'</div>'+
         '<h2>'+esc(EV.name)+'</h2><p class="ci-sub">'+EV.place+' · '+EV.time+'</p>'+
-        '<div class="field"><label>'+ic("user")+' 이름</label><input id="ciName" value="'+esc(cs.name)+'" placeholder="홍길동"/></div>'+
-        '<div class="field"><label>'+ic("id-card")+' 사번</label><input id="ciSabun" value="'+esc(cs.sabun)+'" placeholder="예: EMP-1043"/></div>'+
+        '<p class="ci-sub" style="margin-top:6px">대리출석 방지를 위해 <b>구글 로그인</b>으로 본인 확인이 필요해요.</p>'+
+        (cs.err?'<div class="pnote err">'+ic("x-circle")+' '+esc(cs.err)+'</div>':"")+
+        '<button class="google-btn" id="ciLogin">'+googleG()+'<span>Google 계정으로 로그인</span></button></div>';
+    } else if(cs.step==="form"){
+      inner='<div class="ci-card"><div class="ci-brand">'+ic("qr-code")+' 출첵</div>'+
+        '<div class="scanned-tag '+(mode==="in"?"st-in":"st-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석":"퇴실")+' 인증</div>'+
+        '<h2>'+esc(EV.name)+'</h2>'+
+        '<div class="who-badge">'+ic("user-check")+' '+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' 님으로 로그인됨</div>'+
+        '<div class="field"><label>'+ic("id-card")+' 사번</label><input id="ciSabun" value="'+esc(cs.sabun)+'" placeholder="예: EMP-1043"/>'+
+          '<span class="field-hint">본인 사번을 입력하세요</span></div>'+
         (cs.err?'<div class="pnote err">'+ic("x-circle")+' '+esc(cs.err)+'</div>':"")+
         '<button class="pbtn '+(mode==="in"?"primary":"primary-out")+'" id="ciSubmit">'+(mode==="in"?ic("log-in")+" 출석하기":ic("log-out")+" 퇴실하기")+'</button></div>';
     } else if(cs.step==="task"){
@@ -724,7 +763,7 @@ function runCheckin(){
       const r=cs.result, sub=cs.submitted;
       inner='<div class="ci-card done-step"><div class="done-ic '+(r.mode==="in"?"d-in":"d-out")+'">'+ic("check-circle-2")+'</div>'+
         '<h2>'+(r.mode==="out"?"퇴실 완료!":(type==="training"?"출석 완료!":"참석 완료!"))+'</h2>'+
-        '<div class="done-time">'+fmt(r.at)+'</div><div class="done-who">'+esc(cs.name)+' · '+esc(cs.sabun)+'</div>'+
+        '<div class="done-time">'+fmt(r.at)+'</div><div class="done-who">'+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' · '+esc(cs.sabun)+'</div>'+
         (sub?'<div class="done-sub">'+ic("check-circle-2")+' 후속 작업 제출 완료 · 만족도 ★'+sub.rating+(sub.quizTotal?' · 퀴즈 '+sub.quizScore+'/'+sub.quizTotal:'')+'</div>':"")+
         '<p class="ci-sub">운영자 화면에 실시간으로 반영됐어요. 창을 닫으셔도 됩니다.</p></div>';
     }
@@ -733,8 +772,9 @@ function runCheckin(){
   }
 
   function wireCi(){
-    if(cs.step==="form"){
-      const nm=document.getElementById("ciName"); if(nm)nm.addEventListener("input",e=>cs.name=e.target.value);
+    if(cs.step==="auth"){
+      const lg=document.getElementById("ciLogin"); if(lg)lg.onclick=doLogin;
+    } else if(cs.step==="form"){
       const sb=document.getElementById("ciSabun"); if(sb)sb.addEventListener("input",e=>cs.sabun=e.target.value.toUpperCase());
       const btn=document.getElementById("ciSubmit"); if(btn)btn.onclick=submit;
     } else if(cs.step==="task"){
@@ -749,22 +789,23 @@ function runCheckin(){
 
   function submit(){
     cs.err=null;
-    const name=cs.name.trim(), sabun=cs.sabun.trim().toUpperCase();
-    if(!name){cs.err="이름을 입력해 주세요.";return render();}
+    if(!cs.user){cs.err="구글 로그인이 필요해요.";cs.step="auth";return render();}
+    const sabun=cs.sabun.trim().toUpperCase();
     if(!sabun){cs.err="사번을 입력해 주세요.";return render();}
-    const ref=db.ref(DBROOT+"/attendance/"+sabun.replace(/[.#$/\[\]]/g,"_"));
+    const uid=cs.user.uid;
+    const ref=db.ref(DBROOT+"/attendance/"+uid);
     ref.once("value").then(snap=>{
       const rec=snap.val();
       if(mode==="in"){
-        if(rec&&rec.checkInAt){cs.err="이미 "+fmt(rec.checkInAt)+"에 출석 처리됐어요. 한 사번은 다시 출석할 수 없어요.";return render();}
-        const entry={empId:sabun,name:name,checkInAt:Date.now(),checkOutAt:null};
+        if(rec&&rec.checkInAt){cs.err="이미 "+fmt(rec.checkInAt)+"에 출석하셨어요. 한 계정은 다시 출석할 수 없어요.";return render();}
+        const entry={uid:uid,email:cs.user.email||"",name:cs.user.displayName||cs.name||"",empId:sabun,checkInAt:Date.now(),checkOutAt:null};
         ref.set(entry).then(()=>{ cs.result={mode:"in",at:entry.checkInAt};
-          const need=(type==="general"); if(need){cs.step="task";}else{cs.step="done";} render(); });
+          cs.step=(type==="general")?"task":"done"; render(); });
       } else {
         if(!rec||!rec.checkInAt){cs.err="출석 기록이 없어요. 먼저 출석 QR로 체크인해 주세요.";return render();}
-        if(rec.checkOutAt){cs.err="이미 "+fmt(rec.checkOutAt)+"에 퇴실 처리됐어요.";return render();}
-        ref.update({checkOutAt:Date.now()}).then(()=>{ cs.result={mode:"out",at:Date.now()};
-          const need=(type==="training"); if(need){cs.step="task";}else{cs.step="done";} render(); });
+        if(rec.checkOutAt){cs.err="이미 "+fmt(rec.checkOutAt)+"에 퇴실하셨어요.";return render();}
+        ref.update({checkOutAt:Date.now(),empId:sabun}).then(()=>{ cs.result={mode:"out",at:Date.now()};
+          cs.step=(type==="training")?"task":"done"; render(); });
       }
     }).catch(()=>{cs.err="네트워크 오류예요. 잠시 후 다시 시도해 주세요.";render();});
   }
@@ -775,12 +816,9 @@ function runCheckin(){
     const sub={rating:cs.task.rating,comment:cs.task.comment,
       assignment:isTrain?cs.task.assignment:"",fileName:isTrain?cs.task.fileName:"",
       quizScore:isTrain?score:0,quizTotal:isTrain?QUIZ.length:0};
-    const key=cs.sabun.trim().toUpperCase().replace(/[.#$/\[\]]/g,"_");
-    db.ref(DBROOT+"/submissions/"+key).set(sub).then(()=>{cs.submitted=sub;cs.step="done";render();})
+    db.ref(DBROOT+"/submissions/"+cs.user.uid).set(sub).then(()=>{cs.submitted=sub;cs.step="done";render();})
       .catch(()=>{cs.submitted=sub;cs.step="done";render();});
   }
-
-  render();
 }
 
 </script>
