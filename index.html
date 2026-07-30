@@ -359,6 +359,10 @@ i[data-lucide]{width:1em;height:1em;display:inline-block;vertical-align:-.125em}
 .who-badge i{flex:none}
 .ci-card .google-btn{margin-top:6px}
 
+/* 과제 업로드 로더 스핀 */
+@keyframes spin{to{transform:rotate(360deg)}}
+.attach-btn i[data-lucide="loader"]{animation:spin .9s linear infinite}
+
 </style>
 </head>
 <body>
@@ -382,10 +386,12 @@ const FIREBASE_CONFIG = {
 const EVENTID = "chulchek-demo";
 const QR_INTERVAL = 15;                 // QR 회전 주기(초)
 const ANCHOR = 1735689600000;           // 고정 기준시각(모든 기기가 동일 창 계산)
-const EV = { name:"2026 상반기 전사 리더십 워크숍", date:"2026.07.03 (금)", time:"14:00 – 17:00", place:"본사 3층 대강당" };
+const EV = { name:"2026 하반기 전사 AI교육", date:"2026.08.31 (월)", time:"14:00 – 17:00", place:"웰빙센터 4층 로티홀" };
+/* 과제 파일을 교육 진행자 구글 드라이브로 보내기 (Apps Script /exec URL). 비워두면 파일명만 기록 */
+const DRIVE_UPLOAD_URL = "";
 const QUIZ = [
-  { q:"오늘 세션의 핵심 키워드는 ‘심리적 안전감’이다.", a:true },
-  { q:"리더 피드백은 연말에 한 번만 몰아서 주는 것이 좋다.", a:false },
+  { q:"생성형 AI의 결과물은 항상 정확하므로 사실 확인 없이 그대로 사용해도 된다.", a:false },
+  { q:"회사 기밀이나 고객 개인정보를 외부 AI 서비스에 입력해도 문제없다.", a:false },
 ];
 const ROSTER = [
   { empId:"EMP-1002", name:"정민재", dept:"경영지원팀", phone:"010-2841-5507" },
@@ -756,7 +762,10 @@ function runCheckin(){
         '<div class="task-card"><div class="tc-head">'+ic("smile")+' 만족도 <span class="req">필수</span></div><div class="stars">'+stars+'</div>'+
           '<input class="task-input" id="tkComment" placeholder="한 줄 의견 (선택)" value="'+esc(tk.comment)+'"/></div>'+
         (isTrain?'<div class="task-card"><div class="tc-head">'+ic("paperclip")+' 과제·자료 제출</div><input class="task-input" id="tkAssign" placeholder="링크 또는 메모" value="'+esc(tk.assignment)+'"/>'+
-          '<button class="attach-btn'+(tk.fileName?" has-file":"")+'" id="tkFile">'+ic("upload")+' '+(tk.fileName?esc(tk.fileName):"파일 첨부")+'</button></div>':"")+
+          '<input type="file" id="tkFileInput" style="display:none"/>'+
+          '<button class="attach-btn'+(tk.fileName?" has-file":"")+'" id="tkFile">'+
+          (tk.uploading? ic("loader")+" 업로드 중..." : tk.fileName? (ic("check")+" "+esc(tk.fileName)+(DRIVE_UPLOAD_URL?(tk.uploaded?" · 업로드됨":(tk.uploadErr?" · 실패":"")):"")) : ic("upload")+" 파일 첨부")+
+          '</button></div>':"")+
         (isTrain?'<div class="task-card"><div class="tc-head">'+ic("list-checks")+' 간단 퀴즈 <span class="req">필수</span></div>'+quizBlocks+'</div>':"")+
         '<button class="pbtn primary" id="tkSubmit" '+(can?"":"disabled")+'>'+ic("send")+' 제출하기</button></div>';
     } else if(cs.step==="done"){
@@ -781,7 +790,9 @@ function runCheckin(){
       document.querySelectorAll("[data-star]").forEach(b=>b.onclick=()=>{cs.task.rating=+b.dataset.star;render();});
       const cm=document.getElementById("tkComment"); if(cm)cm.addEventListener("input",e=>cs.task.comment=e.target.value);
       const asg=document.getElementById("tkAssign"); if(asg)asg.addEventListener("input",e=>cs.task.assignment=e.target.value);
-      const fa=document.getElementById("tkFile"); if(fa)fa.onclick=()=>{cs.task.fileName="제출파일_"+(cs.name||"익명")+".pdf";render();};
+      const fi=document.getElementById("tkFileInput");
+      const fa=document.getElementById("tkFile");
+      if(fa&&fi){ fa.onclick=()=>fi.click(); fi.onchange=()=>handleFile(fi.files&&fi.files[0]); }
       document.querySelectorAll("[data-quiz]").forEach(b=>b.onclick=()=>{cs.task.quiz[b.dataset.quiz]=(b.dataset.ans==="1");render();});
       const su=document.getElementById("tkSubmit"); if(su)su.onclick=submitTask;
     }
@@ -808,6 +819,25 @@ function runCheckin(){
           cs.step=(type==="training")?"task":"done"; render(); });
       }
     }).catch(()=>{cs.err="네트워크 오류예요. 잠시 후 다시 시도해 주세요.";render();});
+  }
+
+  function handleFile(f){
+    if(!f) return;
+    cs.task.fileName=f.name; cs.task.uploaded=false; cs.task.uploadErr=false;
+    if(DRIVE_UPLOAD_URL){
+      cs.task.uploading=true; render();
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const b64=((reader.result||"")+"").split(",")[1]||"";
+        const who=(cs.name||"익명")+"_"+(cs.sabun||"");
+        fetch(DRIVE_UPLOAD_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},
+          body:JSON.stringify({filename:who+"_"+f.name,mimeType:f.type||"application/octet-stream",bytes:b64})})
+          .then(()=>{cs.task.uploading=false;cs.task.uploaded=true;render();})
+          .catch(()=>{cs.task.uploading=false;cs.task.uploadErr=true;render();});
+      };
+      reader.onerror=()=>{cs.task.uploading=false;cs.task.uploadErr=true;render();};
+      reader.readAsDataURL(f);
+    } else { render(); }
   }
 
   function submitTask(){
