@@ -394,18 +394,31 @@ const QUIZ = [
   { q:"회사 기밀이나 고객 개인정보를 외부 AI 서비스에 입력해도 문제없다.", a:false },
 ];
 const ROSTER = [
-  { empId:"EMP-1002", name:"정민재", dept:"경영지원팀", phone:"010-2841-5507" },
-  { empId:"EMP-1015", name:"한지우", dept:"교육기획팀", phone:"010-3392-1180" },
-  { empId:"EMP-1029", name:"오세훈", dept:"인재문화팀", phone:"010-7714-2093" },
-  { empId:"EMP-1043", name:"김서준", dept:"인재문화팀", phone:"010-4408-6621" },
-  { empId:"EMP-1058", name:"윤채원", dept:"홍보팀",     phone:"010-9925-3374" },
-  { empId:"EMP-1071", name:"박도윤", dept:"경영지원팀", phone:"010-2263-8890" },
-  { empId:"EMP-1088", name:"임나윤", dept:"교육기획팀", phone:"010-5571-4402" },
-  { empId:"EMP-1096", name:"강태오", dept:"IT팀",       phone:"010-8830-1176" },
-  { empId:"EMP-1108", name:"이하은", dept:"교육기획팀", phone:"010-3345-9962" },
-  { empId:"EMP-1120", name:"서지호", dept:"홍보팀",     phone:"010-6617-2288" },
-  { empId:"EMP-1134", name:"문가온", dept:"IT팀",       phone:"010-4429-7731" },
-  { empId:"EMP-1147", name:"배시우", dept:"인재문화팀", phone:"010-7758-1043" },
+  { empId:"25050065", name:"이겨레", dept:"기업문화", phone:"" },
+  { empId:"18020040", name:"황혜진", dept:"캐스팅센터", phone:"" },
+  { empId:"22010204", name:"김미지", dept:"인사", phone:"" },
+  { empId:"24100047", name:"황현진", dept:"캐스팅센터", phone:"" },
+  { empId:"25040196", name:"이은선", dept:"기업문화", phone:"" },
+  { empId:"26010107", name:"김효민", dept:"캐스팅센터", phone:"" },
+  { empId:"16110197", name:"정미래", dept:"캐스팅센터", phone:"" },
+  { empId:"22070105", name:"박소영", dept:"캐스팅센터", phone:"" },
+  { empId:"24030050", name:"정원경", dept:"인사", phone:"" },
+  { empId:"25040194", name:"권수현", dept:"캐스팅센터", phone:"" },
+  { empId:"25050181", name:"최유빈", dept:"기업문화", phone:"" },
+  { empId:"25100001", name:"양혜정", dept:"기업문화", phone:"" },
+  { empId:"25100062", name:"서해인", dept:"인사", phone:"" },
+  { empId:"25120242", name:"이유진", dept:"기업문화", phone:"" },
+  { empId:"06021001", name:"안태환", dept:"인재문화팀", phone:"" },
+  { empId:"17020005", name:"소지연", dept:"인사", phone:"" },
+  { empId:"17090102", name:"이진주", dept:"인사", phone:"" },
+  { empId:"23010014", name:"우지수", dept:"기업문화", phone:"" },
+  { empId:"24030052", name:"양수민", dept:"인사", phone:"" },
+  { empId:"25010099", name:"김나영", dept:"기업문화", phone:"" },
+  { empId:"15011002", name:"김지윤", dept:"기업문화", phone:"" },
+  { empId:"24020031", name:"김동현", dept:"기업문화", phone:"" },
+  { empId:"13011012", name:"황선호", dept:"기업문화", phone:"" },
+  { empId:"26010141", name:"고재형", dept:"기업문화", phone:"" },
+  { empId:"26040146", name:"박예린", dept:"기업문화", phone:"" },
 ];
 
 /* ---------- 유틸 ---------- */
@@ -523,7 +536,6 @@ function runOperator(){
   function renderOp(){
     const app=document.getElementById("app");
     if(!configured){ app.innerHTML=cfgBanner(); refreshIcons(); return; }
-    const local = location.protocol==="file:";
     const s=stats(), rows=opRows(), ss=subStats(), isTrain=st.eventType==="training";
     const now=Date.now(), sl=secondsLeft(now), url=checkinUrl();
 
@@ -532,7 +544,6 @@ function runOperator(){
       '<div class="stage-head"><span class="live">'+ic("radio")+' LIVE · 강당 스크린</span>'+
         '<div class="mode-toggle"><button class="mt-btn '+(st.adminMode==="in"?"on-in":"")+'" data-mode="in">'+ic("log-in")+' 출석 QR</button>'+
         (isTrain?'<button class="mt-btn '+(st.adminMode==="out"?"on-out":"")+'" data-mode="out">'+ic("log-out")+' 퇴실 QR</button>':"")+'</div></div>'+
-      (local?'<div class="cfg-warn">'+ic("triangle-alert")+' 파일을 직접 연 상태예요. 폰 스캔이 되려면 <b>호스팅된 주소</b>에서 열어야 합니다 (가이드 참고).</div>':"")+
       '<div class="stage-body"><div class="qr-frame" id="qrFrame">'+realQrSvg(url)+'<div class="qr-refresh">'+ic("refresh-cw")+' 새 코드</div></div>'+
         '<div class="stage-meta"><div class="chk-badge '+(st.adminMode==="in"?"b-in":"b-out")+'">'+
           (st.adminMode==="in"?ic("log-in")+" 출석 QR — 폰으로 스캔하세요":ic("log-out")+" 퇴실 QR — 폰으로 스캔하세요")+'</div>'+
