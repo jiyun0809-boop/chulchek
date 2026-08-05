@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>출첵 CHULCHEK · 실시간 QR 출결</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -9,7 +8,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
-
 :root{
   --ink:#12151b; --ink2:#1b202a; --paper:#eef1f5; --card:#ffffff; --line:#e3e7ec;
   --text:#171b22; --muted:#727a86; --brand:#3b5bff; --present:#12b886;
@@ -372,9 +370,7 @@ i[data-lucide]{width:1em;height:1em;display:inline-block;vertical-align:-.125em}
 .modal-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(59,91,255,.12)}
 .modal-hint{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:#f0f4ff;border:1px solid #dbe4ff;border-radius:10px;padding:9px 11px;margin:2px 0 0}
 .modal-hint i{width:15px;height:15px;flex:none}
-
-</style></head><body><div class="app" id="app"></div><script>
-/* ============================================================================
+</style></head><body><div class="app" id="app"></div><script>/* ============================================================================
    출첵 (CHULCHEK) LIVE — 다기기 실시간 출결
    - 관객 폰이 진짜 QR을 스캔 → 이름+사번 체크인 → 운영자 대시보드 실시간 갱신
    - Firebase Realtime Database 사용 (아래 FIREBASE_CONFIG만 붙여넣으면 됨)
@@ -710,8 +706,14 @@ function runOperator(){
     if(txt)txt.textContent=sl+"초";
     const pl=document.getElementById("previewLink"); if(pl)pl.href=checkinUrl();
     if(ring){const RC=2*Math.PI*26,frac=Math.max(0,Math.min(1,sl/QR_INTERVAL));ring.setAttribute("stroke-dasharray",RC);ring.setAttribute("stroke-dashoffset",RC*(1-frac));ring.setAttribute("stroke",sl<=5?"var(--expire)":"var(--amber)");}
-    if(win!==st.lastWindow){ st.lastWindow=win; const frame=document.getElementById("qrFrame");
+    if(win!==st.lastWindow){ st.lastWindow=win; publishLive(win); const frame=document.getElementById("qrFrame");
       if(frame)frame.innerHTML=realQrSvg(checkinUrl())+'<div class="qr-refresh">'+ic("refresh-cw")+' 새 코드</div>'; refreshIcons(); }
+  }
+  function publishLive(w){
+    if(!configured)return;
+    db.ref(DBROOT+"/live").set({ w:w,
+      i:tokenCode(EVENTID+"|in|"+w), o:tokenCode(EVENTID+"|out|"+w),
+      pi:tokenCode(EVENTID+"|in|"+(w-1)), po:tokenCode(EVENTID+"|out|"+(w-1)) }).catch(()=>{});
   }
 
   renderOp();
@@ -726,18 +728,20 @@ function runCheckin(){
   const cs = { step:"init", user:null, name:"", sabun:"", err:null, result:null, submitted:null,
     task:{rating:0,comment:"",assignment:"",fileName:"",quiz:{}} };
 
-  function validate(){
+  function tokenOkLive(live){
+    if(live){ const valid = mode==="out" ? [live.o,live.po] : [live.i,live.pi];
+      if(valid.indexOf(t)!==-1) return true; }
+    // 폴백: 운영자 live 정보가 없을 때만 시계 기반(±2창) 검증
     const cur=windowOf(Date.now());
-    const ok = tokenCode(EVENTID+"|"+mode+"|"+w)===t;
-    const fresh = Math.abs(cur-w)<=1;
-    return (ok&&fresh) ? "auth" : "expired";
+    return tokenCode(EVENTID+"|"+mode+"|"+w)===t && Math.abs(cur-w)<=2;
   }
 
   if(!configured){ cs.step="config"; render(); }
   else {
-    db.ref(DBROOT+"/event").once("value").then(s=>{ curEvent=Object.assign({}, EV, s.val()||{}); }).catch(()=>{}).then(()=>{
-      cs.step=validate(); render();
-    });
+    Promise.all([ db.ref(DBROOT+"/event").once("value"), db.ref(DBROOT+"/live").once("value") ])
+      .then(([es,ls])=>{ curEvent=Object.assign({}, EV, es.val()||{});
+        cs.step = tokenOkLive(ls.val()) ? "auth" : "expired"; render(); })
+      .catch(()=>{ cs.step = tokenOkLive(null) ? "auth" : "expired"; render(); });
   }
 
   function doLogin(){
@@ -876,5 +880,4 @@ function runCheckin(){
       .catch(()=>{cs.submitted=sub;cs.step="done";render();});
   }
 }
-
 </script></body></html>
