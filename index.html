@@ -736,30 +736,23 @@ function runCheckin(){
   if(!configured){ cs.step="config"; render(); }
   else {
     db.ref(DBROOT+"/event").once("value").then(s=>{ curEvent=Object.assign({}, EV, s.val()||{}); }).catch(()=>{}).then(()=>{
-      return auth.getRedirectResult();
-    }).then(r=>{
-      if(r && r.user){ cs.user=r.user; cs.name=r.user.displayName||""; cs.step="form"; render(); }
-      else { cs.step=validate(); render(); }
-    }).catch(()=>{ cs.step=validate(); render(); });
+      cs.step=validate(); render();
+    });
   }
 
   function doLogin(){
     cs.err=null;
     const provider=new firebase.auth.GoogleAuthProvider();
-    cs.step="init"; render();               // 즉시 '잠시만요' 표시로 반응 확인
-    Promise.resolve().then(()=>auth.signInWithRedirect(provider)).catch(err=>{
-      const code=err&&err.code;
-      // 리다이렉트가 불가한 환경이면 팝업으로 폴백
-      auth.signInWithPopup(provider).then(res=>{
-        cs.user=res.user; cs.name=res.user.displayName||""; cs.step="form"; render();
-      }).catch(err2=>{
-        const c2=err2&&err2.code;
-        if(c2==="auth/unauthorized-domain") cs.err="이 주소가 Firebase 승인 도메인에 등록되지 않았어요. (승인된 도메인에 이 사이트 주소를 추가해 주세요)";
-        else if(c2==="auth/operation-not-allowed") cs.err="구글 로그인이 사용 설정되어 있지 않아요.";
-        else if(c2==="auth/popup-closed-by-user"||c2==="auth/cancelled-popup-request") cs.err="로그인 창이 닫혔어요. 다시 시도해 주세요.";
-        else cs.err="로그인에 실패했어요: "+(c2||code||"알 수 없는 오류");
-        cs.step="auth"; render();
-      });
+    auth.signInWithPopup(provider).then(res=>{
+      cs.user=res.user; cs.name=res.user.displayName||""; cs.step="form"; render();
+    }).catch(err=>{
+      const c=err&&err.code;
+      if(c==="auth/unauthorized-domain") cs.err="이 주소가 Firebase 승인 도메인에 등록되지 않았어요.";
+      else if(c==="auth/operation-not-allowed") cs.err="구글 로그인이 사용 설정되어 있지 않아요.";
+      else if(c==="auth/popup-closed-by-user"||c==="auth/cancelled-popup-request") cs.err="로그인 창이 닫혔어요. 다시 시도해 주세요.";
+      else if(c==="auth/popup-blocked") cs.err="브라우저가 팝업을 차단했어요. 팝업 허용 후 다시 시도해 주세요.";
+      else cs.err="로그인에 실패했어요. 다시 시도해 주세요. ("+(c||"오류")+")";
+      cs.step="auth"; render();
     });
   }
 
