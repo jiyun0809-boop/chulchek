@@ -390,6 +390,12 @@ i[data-lucide]{width:1em;height:1em;display:inline-block;vertical-align:-.125em}
 .scr-guide i{width:26px;height:26px}
 .scr-count{font-size:clamp(13px,1.5vw,17px);color:#8a94a3}
 .scr-count #scrNum{color:#ffb020;font-weight:800}
+
+/* 참가자 화면 출석/퇴실 큰 배지 */
+.mode-badge{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;font-size:18px;font-weight:800;padding:12px 18px;border-radius:16px;margin:2px 0 4px}
+.mode-badge i{width:20px;height:20px}
+.mode-badge.mb-in{color:#0c8f68;background:rgba(18,184,134,.12);border:1.5px solid rgba(18,184,134,.35)}
+.mode-badge.mb-out{color:#2f49d1;background:rgba(59,91,255,.1);border:1.5px solid rgba(59,91,255,.32)}
 </style></head><body><div class="app" id="app"></div><script>/* ============================================================================
    출첵 (CHULCHEK) LIVE — 다기기 실시간 출결
    - 관객 폰이 진짜 QR을 스캔 → 이름+사번 체크인 → 운영자 대시보드 실시간 갱신
@@ -495,6 +501,7 @@ function runScreen(){
   if(!configured){ document.getElementById("app").innerHTML='<div class="scr-wrap"><div class="scr-card"><h2>설정이 필요해요</h2></div></div>'; return; }
   let sMode="in", lastWin=null;
   db.ref(DBROOT+"/event").on("value",s=>{ curEvent=Object.assign({}, EV, s.val()||{}); render(); });
+  db.ref(DBROOT+"/mode").on("value",s=>{ const m=s.val(); if((m==="in"||m==="out")&&m!==sMode){ sMode=m; lastWin=null; render(); } });
 
   function scrUrl(){ const w=windowOf(Date.now()); return baseUrl()+"?c=1&w="+w+"&t="+tokenCode(EVENTID+"|"+sMode+"|"+w)+"&m="+sMode+"&ty=training"; }
   function publishLive(w){ db.ref(DBROOT+"/live").set({ w:w, ts:Date.now() }).catch(()=>{}); }
@@ -510,9 +517,9 @@ function runScreen(){
         '<div class="scr-meta">'+esc(curEvent.date)+' · '+esc(curEvent.time)+' · '+esc(curEvent.place)+'</div>'+
         '<div class="scr-qr" id="scrQr">'+realQrSvg(scrUrl(),520)+'</div>'+
         '<div class="scr-guide">'+(sMode==="in"?ic("log-in"):ic("log-out"))+' 휴대폰 카메라로 '+(sMode==="in"?"출석":"퇴실")+' QR을 스캔하세요</div>'+
-        '<div class="scr-count"><span id="scrNum">15</span>초 뒤 코드 변경 · 매 15초 회전으로 대리출석 차단</div>'+
+        '<div class="scr-count"><span id="scrNum">15</span>초 뒤 코드 변경</div>'+
       '</div></div>';
-    document.querySelectorAll("[data-sm]").forEach(b=>b.onclick=()=>{ sMode=b.dataset.sm; lastWin=null; render(); });
+    document.querySelectorAll("[data-sm]").forEach(b=>b.onclick=()=>{ sMode=b.dataset.sm; db.ref(DBROOT+"/mode").set(sMode).catch(()=>{}); lastWin=null; render(); });
     refreshIcons();
   }
   render();
@@ -535,6 +542,7 @@ function runOperator(){
 
   if(configured){
     db.ref(DBROOT+"/event").on("value",s=>{ curEvent=Object.assign({}, EV, s.val()||{}); renderOp(); });
+    db.ref(DBROOT+"/mode").on("value",s=>{ const m=s.val(); if((m==="in"||m==="out")&&m!==st.adminMode){ st.adminMode=m; renderOp(); } });
     db.ref(DBROOT+"/attendance").on("value",s=>{ st.attendance=s.val()||{}; renderOp(); });
     db.ref(DBROOT+"/submissions").on("value",s=>{ st.submissions=s.val()||{}; renderOp(); });
   }
@@ -656,8 +664,8 @@ function runOperator(){
   }
 
   function wireOp(){
-    document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{st.adminMode=b.dataset.mode;renderOp();});
-    document.querySelectorAll("[data-type]").forEach(b=>b.onclick=()=>{st.eventType=b.dataset.type;if(st.eventType==="general")st.adminMode="in";renderOp();});
+    document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{st.adminMode=b.dataset.mode;db.ref(DBROOT+"/mode").set(st.adminMode).catch(()=>{});renderOp();});
+    document.querySelectorAll("[data-type]").forEach(b=>b.onclick=()=>{st.eventType=b.dataset.type;if(st.eventType==="general"){st.adminMode="in";db.ref(DBROOT+"/mode").set("in").catch(()=>{});}renderOp();});
     const up=document.getElementById("btnUpload"), fi=document.getElementById("fileInput");
     if(up&&fi){ up.onclick=()=>fi.click(); fi.onchange=handleUpload; }
     const rs=document.getElementById("btnReset");
@@ -834,14 +842,14 @@ function runCheckin(){
         '<button class="pbtn subtle" onclick="location.reload()">'+ic("refresh-cw")+' 다시 시도</button></div>';
     } else if(cs.step==="auth"){
       inner='<div class="ci-card"><div class="ci-brand">'+ic("qr-code")+' 출첵</div>'+
-        '<div class="scanned-tag '+(mode==="in"?"st-in":"st-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석":"퇴실")+' 인증 · '+esc(t)+'</div>'+
+        '<div class="mode-badge '+(mode==="in"?"mb-in":"mb-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석 체크":"퇴실 체크")+'</div>'+
         '<h2>'+esc(curEvent.name)+'</h2><p class="ci-sub">'+esc(curEvent.place)+' · '+esc(curEvent.time)+'</p>'+
         '<p class="ci-sub" style="margin-top:6px">대리출석 방지를 위해 <b>구글 로그인</b>으로 본인 확인이 필요해요.</p>'+
         (cs.err?'<div class="pnote err">'+ic("x-circle")+' '+esc(cs.err)+'</div>':"")+
         '<button class="google-btn" id="ciLogin">'+googleG()+'<span>Google 계정으로 로그인</span></button></div>';
     } else if(cs.step==="form"){
       inner='<div class="ci-card"><div class="ci-brand">'+ic("qr-code")+' 출첵</div>'+
-        '<div class="scanned-tag '+(mode==="in"?"st-in":"st-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석":"퇴실")+' 인증</div>'+
+        '<div class="mode-badge '+(mode==="in"?"mb-in":"mb-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석 체크":"퇴실 체크")+'</div>'+
         '<h2>'+esc(curEvent.name)+'</h2>'+
         '<div class="who-badge">'+ic("user-check")+' '+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' 님으로 로그인됨</div>'+
         '<div class="field"><label>'+ic("id-card")+' 사번</label><input id="ciSabun" value="'+esc(cs.sabun)+'" placeholder="예: EMP-1043"/>'+
