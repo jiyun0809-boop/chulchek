@@ -625,8 +625,10 @@ function runOperator(){
 
     const subCard=(i,v,l)=>'<div class="sub-stat">'+ic(i)+'<div><div class="ss-val">'+v+'</div><div class="ss-label">'+l+'</div></div></div>';
     const subPanel='<div class="sub-panel"><div class="sub-panel-head">'+ic("clipboard-check")+' 후속 작업 현황 <span>· 퇴실 직후</span></div>'+
-      '<div class="sub-stats ss-2">'+subCard("send",ss.n+"/"+ss.present+" ("+ss.subRate+"%)","제출률")+
-      subCard("star",(ss.n?ss.avg.toFixed(1):"—"),"평균 만족도")+'</div></div>';
+      '<div class="sub-stats">'+subCard("send",ss.n+"/"+ss.present+" ("+ss.subRate+"%)","제출률")+
+      subCard("star",(ss.n?ss.avg.toFixed(1):"—"),"평균 만족도")+
+      subCard("list-checks",(ss.n?ss.qPct+"%":"—"),"퀴즈 정답률")+
+      subCard("paperclip",ss.assignN+"건","과제 제출")+'</div></div>';
 
     const preSent=st.preNotify==="sent";
     const preCard='<div class="prenotify '+(preSent?"pn-sent":"")+'"><div class="pn-top">'+
@@ -646,6 +648,7 @@ function runOperator(){
           '<button class="btn ghost" id="btnReset">'+ic("rotate-ccw")+' 초기화</button>'+
           '<button class="btn ghost" id="btnScreen">'+ic("monitor")+' QR 화면</button>'+
           '<button class="btn primary" id="btnExport">'+ic("download")+' 엑셀</button></div></div>'+
+      preCard+
       '<div class="rate-banner"><div class="rate-head"><span class="rate-label">실시간 출석</span>'+
         '<span class="rate-count">명단 '+s.total+'명 · 참여율 '+s.rate+'%</span></div>'+
         '<div class="rate-big">'+s.present+'<span>명</span></div>'+
@@ -657,7 +660,6 @@ function runOperator(){
       '<div class="table-wrap"><table class="attn-table"><thead><tr><th>이름</th><th>부서</th><th>'+(isTrain?"출석":"참석")+'</th>'+
         (isTrain?'<th>퇴실</th>':"")+'<th>상태</th><th>후속작업</th></tr></thead><tbody>'+
         (trows||'<tr><td colspan="6" class="empty-row">아직 체크인한 사람이 없어요. 폰으로 QR을 스캔해 보세요.</td></tr>')+'</tbody></table></div>'+
-      preCard+
       '</section>';
 
     app.innerHTML='<div class="admin">'+stage+dash+'</div>';
@@ -704,6 +706,7 @@ function runOperator(){
         const o={사번:r.empId,이름:r.name,부서:r.dept,상태:r.checkInAt?(r.checkOutAt?"퇴실":(isTrain?"출석":"참석")):"미"+(isTrain?"출석":"참석"),출석시각:fmt(r.checkInAt)};
         if(isTrain)o.퇴실시각=fmt(r.checkOutAt);
         o.만족도=sub?sub.rating:"";
+        if(isTrain){o.과제제출=sub?((sub.assignment||sub.fileName)?"제출":"미제출"):"";o.퀴즈=sub?(sub.quizScore+"/"+sub.quizTotal):"";}
         o.참여소감=sub?(sub.comment||""):""; return o; });
       const ws=XLSX.utils.aoa_to_sheet([
         [curEvent.name],
@@ -869,19 +872,25 @@ function runCheckin(){
         '<button class="ox-btn '+(sel===true?"on-o":"")+'" data-quiz="'+i+'" data-ans="1">O</button>'+
         '<button class="ox-btn '+(sel===false?"on-x":"")+'" data-quiz="'+i+'" data-ans="0">X</button></div></div>';}).join("");
       const quizDone=QUIZ.every((q,i)=>tk.quiz[i]!==undefined);
-      const can=tk.rating>0;
+      const can=tk.rating>0 && quizDone;
       inner='<div class="ci-card task-step"><div class="task-banner">'+ic("check-circle-2")+' 퇴실 완료 · '+fmt(cs.result.at)+'</div>'+
-        '<h2>참여해주셔서 감사합니다.</h2><p class="ci-sub">만족도와 참여소감을 남겨주세요</p>'+
+        '<h2>참여해주셔서 감사합니다.</h2><p class="ci-sub">아래 항목을 완료해 주세요</p>'+
         '<div class="task-card"><div class="tc-head">'+ic("smile")+' 만족도 <span class="req">필수</span></div><div class="stars">'+stars+'</div></div>'+
         '<div class="task-card"><div class="tc-head">'+ic("message-square")+' 참여소감 <span class="opt">선택</span></div>'+
-          '<textarea class="task-input task-area" id="tkComment" rows="3" placeholder="오늘 미팅 참여소감을 남겨주세요">'+esc(tk.comment)+'</textarea></div>'+
+          '<textarea class="task-input task-area" id="tkComment" rows="3" placeholder="오늘 참여소감을 남겨주세요">'+esc(tk.comment)+'</textarea></div>'+
+        '<div class="task-card"><div class="tc-head">'+ic("paperclip")+' 과제·자료 제출 <span class="opt">선택</span></div><input class="task-input" id="tkAssign" placeholder="링크 또는 메모" value="'+esc(tk.assignment)+'"/>'+
+          '<input type="file" id="tkFileInput" style="display:none"/>'+
+          '<button class="attach-btn'+(tk.fileName?" has-file":"")+'" id="tkFile">'+
+          (tk.uploading? ic("loader")+" 업로드 중..." : tk.fileName? (ic("check")+" "+esc(tk.fileName)+(DRIVE_UPLOAD_URL?(tk.uploaded?" · 업로드됨":(tk.uploadErr?" · 실패":"")):"")) : ic("upload")+" 파일 첨부")+
+          '</button></div>'+
+        '<div class="task-card"><div class="tc-head">'+ic("list-checks")+' 간단 퀴즈 <span class="req">필수</span></div>'+quizBlocks+'</div>'+
         '<button class="pbtn primary" id="tkSubmit" '+(can?"":"disabled")+'>'+ic("send")+' 제출하기</button></div>';
     } else if(cs.step==="done"){
       const r=cs.result, sub=cs.submitted;
       inner='<div class="ci-card done-step"><div class="done-ic '+(r.mode==="in"?"d-in":"d-out")+'">'+ic("check-circle-2")+'</div>'+
         '<h2>'+(r.mode==="out"?"퇴실 완료!":(type==="training"?"출석 완료!":"참석 완료!"))+'</h2>'+
         '<div class="done-time">'+fmt(r.at)+'</div><div class="done-who">'+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' · '+esc(cs.sabun)+'</div>'+
-        (sub?'<div class="done-sub">'+ic("check-circle-2")+' 소중한 의견 감사합니다 · 만족도 ★'+sub.rating+'</div>':"")+
+        (sub?'<div class="done-sub">'+ic("check-circle-2")+' 후속 작업 제출 완료 · 만족도 ★'+sub.rating+(sub.quizTotal?' · 퀴즈 '+sub.quizScore+'/'+sub.quizTotal:'')+'</div>':"")+
         '<p class="ci-sub">운영자 화면에 실시간으로 반영됐어요. 창을 닫으셔도 됩니다.</p></div>';
     }
     app.innerHTML='<div class="checkin-wrap">'+inner+'</div>';
@@ -913,7 +922,7 @@ function runCheckin(){
     const sabun=cs.sabun.trim().toUpperCase();
     if(!sabun){cs.err="사번을 입력해 주세요.";return render();}
     const inRoster=rosterIds.has(sabun);
-    if(!inRoster){
+    if(!inRoster && mode==="in"){
       cs.needName=true;
       if(!(cs.gname||"").trim()){ cs.err="명단에 없는 사번이에요. 이름을 입력해 주세요."; return render(); }
     }
@@ -958,8 +967,9 @@ function runCheckin(){
   }
 
   function submitTask(){
+    let score=0; QUIZ.forEach((q,i)=>{if(cs.task.quiz[i]===q.a)score++;});
     const sub={rating:cs.task.rating,comment:cs.task.comment,
-      assignment:"",fileName:"",quizScore:0,quizTotal:0};
+      assignment:cs.task.assignment||"",fileName:cs.task.fileName||"",quizScore:score,quizTotal:QUIZ.length};
     db.ref(DBROOT+"/submissions/"+cs.user.uid).set(sub).then(()=>{cs.submitted=sub;cs.step="done";render();})
       .catch(()=>{cs.submitted=sub;cs.step="done";render();});
   }
