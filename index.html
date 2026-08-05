@@ -852,8 +852,8 @@ function runCheckin(){
         '<div class="mode-badge '+(mode==="in"?"mb-in":"mb-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석 체크":"퇴실 체크")+'</div>'+
         '<h2>'+esc(curEvent.name)+'</h2>'+
         '<div class="who-badge">'+ic("user-check")+' '+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' 님으로 로그인됨</div>'+
-        '<div class="field"><label>'+ic("id-card")+' 사번</label><input id="ciSabun" value="'+esc(cs.sabun)+'" placeholder="예: EMP-1043"/>'+
-          '<span class="field-hint">본인 사번을 입력하세요</span></div>'+
+        '<div class="field"><label>'+ic("id-card")+' 사번</label><input id="ciSabun" value="'+esc(cs.sabun)+'" placeholder="예: 00000000 (8자리)"/>'+
+          '<span class="field-hint">본인 사번(숫자)을 입력하세요</span></div>'+
         (cs.err?'<div class="pnote err">'+ic("x-circle")+' '+esc(cs.err)+'</div>':"")+
         '<button class="pbtn '+(mode==="in"?"primary":"primary-out")+'" id="ciSubmit">'+(mode==="in"?ic("log-in")+" 출석하기":ic("log-out")+" 퇴실하기")+'</button></div>';
     } else if(cs.step==="task"){
