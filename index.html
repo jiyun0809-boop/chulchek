@@ -1,8 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<html lang="ko"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>출첵 CHULCHEK · 실시간 QR 출결</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -363,11 +360,20 @@ i[data-lucide]{width:1em;height:1em;display:inline-block;vertical-align:-.125em}
 @keyframes spin{to{transform:rotate(360deg)}}
 .attach-btn i[data-lucide="loader"]{animation:spin .9s linear infinite}
 
-</style>
-</head>
-<body>
-<div class="app" id="app"></div>
-<script>
+/* 참여소감 textarea + 선택 태그 */
+.task-area{min-height:74px;resize:vertical;font-family:inherit;line-height:1.5}
+.tc-head .opt{margin-left:auto;font-size:11px;font-weight:700;color:#8a929e;background:#eef0f3;padding:2px 8px;border-radius:10px}
+
+/* 행사 정보 편집 */
+.edit-evt{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:3px;border-radius:8px;vertical-align:middle;display:inline-grid;place-items:center;transition:.15s}
+.edit-evt:hover{background:#eef2ff;color:var(--brand)}
+.edit-evt i{width:16px;height:16px}
+.modal-input{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;font-family:inherit;font-size:13.5px;outline:none;transition:.15s}
+.modal-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(59,91,255,.12)}
+.modal-hint{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:#f0f4ff;border:1px solid #dbe4ff;border-radius:10px;padding:9px 11px;margin:2px 0 0}
+.modal-hint i{width:15px;height:15px;flex:none}
+
+</style></head><body><div class="app" id="app"></div><script>
 /* ============================================================================
    출첵 (CHULCHEK) LIVE — 다기기 실시간 출결
    - 관객 폰이 진짜 QR을 스캔 → 이름+사번 체크인 → 운영자 대시보드 실시간 갱신
@@ -386,40 +392,16 @@ const FIREBASE_CONFIG = {
 const EVENTID = "chulchek-demo";
 const QR_INTERVAL = 15;                 // QR 회전 주기(초)
 const ANCHOR = 1735689600000;           // 고정 기준시각(모든 기기가 동일 창 계산)
-const EV = { name:"2026 하반기 전사 AI교육", date:"2026.08.31 (월)", time:"14:00 – 17:00", place:"웰빙센터 4층 로티홀" };
+const EV = { name:"2026 로티홀미팅", date:"2026.08.06 (목)", time:"10:00 – 12:00", place:"웰빙센터 4층 로티홀" };
+let curEvent = Object.assign({}, EV);  // 관리자 화면에서 수정 시 Firebase로 저장·동기화
+function downloadStamp(){const d=new Date(),p=n=>String(n).padStart(2,"0");return d.getFullYear()+"."+p(d.getMonth()+1)+"."+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());}
 /* 과제 파일을 교육 진행자 구글 드라이브로 보내기 (Apps Script /exec URL). 비워두면 파일명만 기록 */
 const DRIVE_UPLOAD_URL = "";
 const QUIZ = [
   { q:"생성형 AI의 결과물은 항상 정확하므로 사실 확인 없이 그대로 사용해도 된다.", a:false },
   { q:"회사 기밀이나 고객 개인정보를 외부 AI 서비스에 입력해도 문제없다.", a:false },
 ];
-const ROSTER = [
-  { empId:"25050065", name:"이겨레", dept:"기업문화", phone:"" },
-  { empId:"18020040", name:"황혜진", dept:"캐스팅센터", phone:"" },
-  { empId:"22010204", name:"김미지", dept:"인사", phone:"" },
-  { empId:"24100047", name:"황현진", dept:"캐스팅센터", phone:"" },
-  { empId:"25040196", name:"이은선", dept:"기업문화", phone:"" },
-  { empId:"26010107", name:"김효민", dept:"캐스팅센터", phone:"" },
-  { empId:"16110197", name:"정미래", dept:"캐스팅센터", phone:"" },
-  { empId:"22070105", name:"박소영", dept:"캐스팅센터", phone:"" },
-  { empId:"24030050", name:"정원경", dept:"인사", phone:"" },
-  { empId:"25040194", name:"권수현", dept:"캐스팅센터", phone:"" },
-  { empId:"25050181", name:"최유빈", dept:"기업문화", phone:"" },
-  { empId:"25100001", name:"양혜정", dept:"기업문화", phone:"" },
-  { empId:"25100062", name:"서해인", dept:"인사", phone:"" },
-  { empId:"25120242", name:"이유진", dept:"기업문화", phone:"" },
-  { empId:"06021001", name:"안태환", dept:"인재문화팀", phone:"" },
-  { empId:"17020005", name:"소지연", dept:"인사", phone:"" },
-  { empId:"17090102", name:"이진주", dept:"인사", phone:"" },
-  { empId:"23010014", name:"우지수", dept:"기업문화", phone:"" },
-  { empId:"24030052", name:"양수민", dept:"인사", phone:"" },
-  { empId:"25010099", name:"김나영", dept:"기업문화", phone:"" },
-  { empId:"15011002", name:"김지윤", dept:"기업문화", phone:"" },
-  { empId:"24020031", name:"김동현", dept:"기업문화", phone:"" },
-  { empId:"13011012", name:"황선호", dept:"기업문화", phone:"" },
-  { empId:"26010141", name:"고재형", dept:"기업문화", phone:"" },
-  { empId:"26040146", name:"박예린", dept:"기업문화", phone:"" },
-];
+const ROSTER = [];  // 명단은 운영자 화면의 [명단 업로드]로 엑셀을 올려 채웁니다
 
 /* ---------- 유틸 ---------- */
 function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
@@ -433,8 +415,8 @@ function googleG(){return '<svg width="17" height="17" viewBox="0 0 48 48"><path
 function refreshIcons(){if(window.lucide&&lucide.createIcons){try{lucide.createIcons();}catch(e){}}}
 function maskPhone(p){return p?p.replace(/(\d{2,3})-(\d{3,4})-(\d{4})/,"$1-****-$3"):"—";}
 function baseUrl(){return location.origin+location.pathname;}
-function preNotifyTime(){const m=EV.time.split("–")[0].trim().match(/(\d{1,2}):(\d{2})/);if(!m)return"시작 10분 전";let x=(+m[1])*60+(+m[2])-10;return String(Math.floor((x%1440)/60)).padStart(2,"0")+":"+String(x%60).padStart(2,"0");}
-function preNotifyMsg(){return "「"+EV.name+"」이(가) 10분 뒤 "+EV.time.split("–")[0].trim()+" "+EV.place+"에서 시작됩니다. 미리 입장해 QR 출석 준비 부탁드립니다. - 출첵";}
+function preNotifyTime(){const m=curEvent.time.split("–")[0].trim().match(/(\d{1,2}):(\d{2})/);if(!m)return"시작 10분 전";let x=(+m[1])*60+(+m[2])-10;return String(Math.floor((x%1440)/60)).padStart(2,"0")+":"+String(x%60).padStart(2,"0");}
+function preNotifyMsg(){return "「"+curEvent.name+"」이(가) 10분 뒤 "+curEvent.time.split("–")[0].trim()+" "+curEvent.place+"에서 시작됩니다. 미리 입장해 QR 출석 준비 부탁드립니다. - 출첵";}
 
 /* ---------- 진짜 스캔되는 QR (qrcode-generator) ---------- */
 function realQrSvg(text, px){
@@ -498,6 +480,7 @@ function runOperator(){
   window.__ck = st;
 
   if(configured){
+    db.ref(DBROOT+"/event").on("value",s=>{ curEvent=Object.assign({}, EV, s.val()||{}); renderOp(); });
     db.ref(DBROOT+"/attendance").on("value",s=>{ st.attendance=s.val()||{}; renderOp(); });
     db.ref(DBROOT+"/submissions").on("value",s=>{ st.submissions=s.val()||{}; renderOp(); });
   }
@@ -541,7 +524,7 @@ function runOperator(){
 
     const stage =
      '<section class="stage">'+
-      '<div class="stage-head"><span class="live">'+ic("radio")+' LIVE · 강당 스크린</span>'+
+      '<div class="stage-head"><span class="live">'+ic("radio")+' LIVE · '+esc(curEvent.name)+'</span>'+
         '<div class="mode-toggle"><button class="mt-btn '+(st.adminMode==="in"?"on-in":"")+'" data-mode="in">'+ic("log-in")+' 출석 QR</button>'+
         (isTrain?'<button class="mt-btn '+(st.adminMode==="out"?"on-out":"")+'" data-mode="out">'+ic("log-out")+' 퇴실 QR</button>':"")+'</div></div>'+
       '<div class="stage-body"><div class="qr-frame" id="qrFrame">'+realQrSvg(url)+'<div class="qr-refresh">'+ic("refresh-cw")+' 새 코드</div></div>'+
@@ -552,7 +535,7 @@ function runOperator(){
             '<circle id="cdRing" cx="32" cy="32" r="26" fill="none" stroke="var(--amber)" stroke-width="6" stroke-linecap="round" transform="rotate(-90 32 32)" style="transition:stroke-dashoffset .95s linear, stroke .3s"></circle>'+
           '</svg><span class="ring-num" id="cdNum">'+sl+'</span></div>'+
           '<div class="cd-text"><strong id="cdText">'+sl+'초</strong> 뒤 코드 변경<span>매 '+QR_INTERVAL+'초 회전 · 촬영본 재사용 차단</span></div></div>'+
-          '<a class="preview-link" href="'+esc(url)+'" target="_blank" rel="noopener">'+ic("external-link")+' 체크인 화면 미리보기(테스트)</a>'+
+          '<a class="preview-link" id="previewLink" href="'+esc(url)+'" target="_blank" rel="noopener">'+ic("external-link")+' 체크인 화면 미리보기(테스트)</a>'+
         '</div></div>'+
       '<div class="stage-foot"><div class="sf-item">'+ic("shield-check")+' 구글 로그인 본인 인증</div>'+
         '<div class="sf-item">'+ic("timer-reset")+' 만료 QR 자동 거부</div>'+
@@ -578,11 +561,9 @@ function runOperator(){
       '<button class="btn warn" id="btnSms">'+ic("send")+' 미출석자 전체 문자</button></div>' : "";
 
     const subCard=(i,v,l)=>'<div class="sub-stat">'+ic(i)+'<div><div class="ss-val">'+v+'</div><div class="ss-label">'+l+'</div></div></div>';
-    const subPanel='<div class="sub-panel"><div class="sub-panel-head">'+ic("clipboard-check")+' 후속 작업 현황 <span>· '+(isTrain?"퇴실 직후":"출석 직후")+'</span></div>'+
-      '<div class="sub-stats '+(isTrain?"":"ss-2")+'">'+subCard("send",ss.n+"/"+ss.present+" ("+ss.subRate+"%)","제출률")+
-      subCard("star",(ss.n?ss.avg.toFixed(1):"—"),"평균 만족도")+
-      (isTrain?subCard("list-checks",(ss.n?ss.qPct+"%":"—"),"퀴즈 정답률"):"")+
-      (isTrain?subCard("paperclip",ss.assignN+"건","과제 제출"):"")+'</div></div>';
+    const subPanel='<div class="sub-panel"><div class="sub-panel-head">'+ic("clipboard-check")+' 후속 작업 현황 <span>· 퇴실 직후</span></div>'+
+      '<div class="sub-stats ss-2">'+subCard("send",ss.n+"/"+ss.present+" ("+ss.subRate+"%)","제출률")+
+      subCard("star",(ss.n?ss.avg.toFixed(1):"—"),"평균 만족도")+'</div></div>';
 
     const preSent=st.preNotify==="sent";
     const preCard='<div class="prenotify '+(preSent?"pn-sent":"")+'"><div class="pn-top">'+
@@ -596,7 +577,7 @@ function runOperator(){
       '<div class="type-bar"><span class="type-label">'+ic("settings")+' 행사 유형</span><div class="type-seg">'+
         '<button class="type-btn '+(isTrain?"on":"")+'" data-type="training">'+ic("graduation-cap")+' 교육형<span>출석+퇴실 · 과제·퀴즈·만족도</span></button>'+
         '<button class="type-btn '+(!isTrain?"on":"")+'" data-type="general">'+ic("party-popper")+' 일반 행사형<span>출석만 · 만족도 조사만</span></button></div></div>'+
-      '<div class="dash-head"><div><h2>'+esc(EV.name)+'</h2><p>'+EV.date+' · '+EV.time+' · '+esc(EV.place)+'</p></div>'+
+      '<div class="dash-head"><div><h2>'+esc(curEvent.name)+' <button class="edit-evt" id="btnEditEvent" title="행사 정보 수정">'+ic("pencil")+'</button></h2><p>'+esc(curEvent.date)+' · '+esc(curEvent.time)+' · '+esc(curEvent.place)+'</p></div>'+
         '<div class="dash-actions"><input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none"/>'+
           '<button class="btn ghost" id="btnUpload">'+ic("upload")+' 명단 업로드</button>'+
           '<button class="btn ghost" id="btnReset">'+ic("rotate-ccw")+' 초기화</button>'+
@@ -629,6 +610,7 @@ function runOperator(){
       db.ref(DBROOT+"/attendance").remove(); db.ref(DBROOT+"/submissions").remove();
       st.preNotify="scheduled"; st.smsSent=new Set(); toast("info","초기화했어요."); };
     const ex=document.getElementById("btnExport"); if(ex)ex.onclick=exportExcel;
+    const ee=document.getElementById("btnEditEvent"); if(ee)ee.onclick=openEditEvent;
     const pre=document.getElementById("btnPre"); if(pre)pre.onclick=()=>{st.preNotify="sent";renderOp();toast("success","전체 "+st.roster.length+"명에게 시작 안내문자를 발송했어요.");};
     const sms=document.getElementById("btnSms"); if(sms)sms.onclick=openSms;
   }
@@ -639,9 +621,10 @@ function runOperator(){
     try{
       const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:"array"});
       const raw=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
-      const pick=(o,ks)=>{for(const k of ks){if(o[k]!=null&&o[k]!=="")return String(o[k]).trim();}return"";};
-      const list=raw.map(o=>({empId:pick(o,["사번","empId","id","ID"]),name:pick(o,["이름","성명","name"]),
-        dept:pick(o,["부서","팀","dept","department"]),phone:pick(o,["연락처","전화번호","휴대폰","phone","mobile"])}))
+      const norm=s=>String(s).replace(/[\s()*·.,\-_/\[\]]/g,"").toLowerCase();
+      const pick=(o,ks)=>{ const set=ks.map(norm); for(const k of Object.keys(o)){ if(set.includes(norm(k))&&o[k]!=null&&o[k]!=="")return String(o[k]).trim(); } return""; };
+      const list=raw.map(o=>({empId:pick(o,["사번","사번(*)","사원번호","empId","id","ID"]),name:pick(o,["이름","성명","name"]),
+        dept:pick(o,["부서","팀","소속","dept","department"]),phone:pick(o,["연락처","전화번호","휴대폰","핸드폰","phone","mobile"])}))
         .filter(r=>r.empId&&r.name);
       if(!list.length)toast("error","명단을 읽지 못했어요. 사번·이름 열 확인.");
       else{ st.roster=list; st.preNotify="scheduled"; renderOp(); toast("success","명단 "+list.length+"명 등록 · 안내문자 "+preNotifyTime()+" 예약됨."); }
@@ -651,21 +634,34 @@ function runOperator(){
   function exportExcel(){
     if(!window.XLSX){toast("error","엑셀 모듈 로드 실패.");return;}
     try{
-      const rows=opRows(), isTrain=st.eventType==="training";
+      const s=stats(), rows=opRows(), isTrain=st.eventType==="training";
       const data=rows.map(r=>{ const sub=r.uid?st.submissions[r.uid]:null;
         const o={사번:r.empId,이름:r.name,부서:r.dept,상태:r.checkInAt?(r.checkOutAt?"퇴실":(isTrain?"출석":"참석")):"미"+(isTrain?"출석":"참석"),출석시각:fmt(r.checkInAt)};
         if(isTrain)o.퇴실시각=fmt(r.checkOutAt);
-        o.만족도=sub?sub.rating:""; if(isTrain){o.과제제출=sub?((sub.assignment||sub.fileName)?"제출":"미제출"):"";o.퀴즈=sub?(sub.quizScore+"/"+sub.quizTotal):"";}
-        o.의견=sub?(sub.comment||""):""; return o; });
-      const ws=XLSX.utils.json_to_sheet(data);
-      ws["!cols"]=Object.keys(data[0]||{}).map(k=>({wch:k==="의견"?20:k==="사번"?10:k==="부서"?12:9}));
+        o.만족도=sub?sub.rating:"";
+        o.참여소감=sub?(sub.comment||""):""; return o; });
+      const ws=XLSX.utils.aoa_to_sheet([
+        [curEvent.name],
+        [curEvent.date+"  ·  "+curEvent.time+"  ·  "+curEvent.place],
+        ["출결 현황  ·  참석 "+s.present+"/"+s.total+"명 ("+s.rate+"%)  ·  다운로드 "+downloadStamp()],
+        []
+      ]);
+      XLSX.utils.sheet_add_json(ws, data, {origin:"A5"});
+      const cols=Object.keys(data[0]||{}).length||6;
+      ws["!merges"]=[
+        {s:{r:0,c:0},e:{r:0,c:cols-1}},
+        {s:{r:1,c:0},e:{r:1,c:cols-1}},
+        {s:{r:2,c:0},e:{r:2,c:cols-1}}
+      ];
+      ws["!cols"]=Object.keys(data[0]||{}).map(k=>({wch:k==="참여소감"?28:k==="사번"?10:k==="부서"?12:9}));
       const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"출결");
-      XLSX.writeFile(wb,"출결_"+EVENTID+".xlsx"); toast("success","엑셀을 내려받았어요.");
+      const safe=(curEvent.name||"출결").replace(/[\\/:*?"<>|]/g,"").trim();
+      XLSX.writeFile(wb,"출결_"+safe+".xlsx"); toast("success","엑셀을 내려받았어요.");
     }catch(e){toast("error","다운로드 실패.");}
   }
   function openSms(){
     const absentees=st.roster.filter(r=>!st.attendance[r.empId]);
-    const msg="[{이름}]님, 「"+EV.name+"」 진행 중입니다. 아직 출석이 확인되지 않았어요. 강당 QR로 출석 부탁드립니다. - 출첵";
+    const msg="[{이름}]님, 「"+curEvent.name+"」 진행 중입니다. 아직 출석이 확인되지 않았어요. 강당 QR로 출석 부탁드립니다. - 출첵";
     const chips=absentees.slice(0,8).map(a=>'<span class="mr-chip">'+esc(a.name)+' · '+maskPhone(a.phone)+'</span>').join("")+(absentees.length>8?'<span class="mr-chip more">+'+(absentees.length-8)+'명</span>':"");
     const wrap=document.createElement("div"); wrap.className="modal-backdrop"; wrap.id="smsModal";
     wrap.innerHTML='<div class="modal"><div class="modal-head"><h3>'+ic("send")+' 미출석자 리마인드 문자</h3><button class="modal-x" id="smsClose">'+ic("x-circle")+'</button></div>'+
@@ -681,12 +677,38 @@ function runOperator(){
     document.getElementById("smsSend").onclick=()=>{close();toast("success","미출석자 "+absentees.length+"명에게 리마인드 문자를 발송했어요.");};
   }
 
+  function openEditEvent(){
+    const e=Object.assign({}, curEvent);
+    const wrap=document.createElement("div"); wrap.className="modal-backdrop"; wrap.id="evtModal";
+    wrap.innerHTML='<div class="modal"><div class="modal-head"><h3>'+ic("pencil")+' 행사 정보 수정</h3><button class="modal-x" id="evtClose">'+ic("x-circle")+'</button></div>'+
+      '<div class="modal-body">'+
+      '<label class="modal-label">행사명</label><input class="modal-input" id="evtName" value="'+esc(e.name)+'" placeholder="예: 2026 로티홀미팅"/>'+
+      '<label class="modal-label">날짜</label><input class="modal-input" id="evtDate" value="'+esc(e.date)+'" placeholder="예: 2026.08.06 (목)"/>'+
+      '<label class="modal-label">시간</label><input class="modal-input" id="evtTime" value="'+esc(e.time)+'" placeholder="예: 10:00 – 12:00"/>'+
+      '<label class="modal-label">장소</label><input class="modal-input" id="evtPlace" value="'+esc(e.place)+'" placeholder="예: 웰빙센터 4층 로티홀"/>'+
+      '<p class="modal-hint">'+ic("info")+' 저장하면 QR 체크인 화면과 안내문자에도 자동 반영됩니다.</p></div>'+
+      '<div class="modal-foot"><button class="btn ghost" id="evtCancel">취소</button><button class="btn primary" id="evtSave">'+ic("check")+' 저장</button></div></div>';
+    document.body.appendChild(wrap); refreshIcons();
+    const close=()=>wrap.remove();
+    wrap.addEventListener("click",ev2=>{if(ev2.target===wrap)close();});
+    document.getElementById("evtClose").onclick=close; document.getElementById("evtCancel").onclick=close;
+    document.getElementById("evtSave").onclick=()=>{
+      const v={ name:(document.getElementById("evtName").value||"").trim()||EV.name,
+                date:(document.getElementById("evtDate").value||"").trim(),
+                time:(document.getElementById("evtTime").value||"").trim(),
+                place:(document.getElementById("evtPlace").value||"").trim() };
+      db.ref(DBROOT+"/event").set(v).then(()=>{ curEvent=Object.assign({}, EV, v); renderOp(); close(); toast("success","행사 정보를 저장했어요."); })
+        .catch(()=>{ toast("error","저장에 실패했어요. 네트워크를 확인해 주세요."); });
+    };
+  }
+
   function tick(){
     if(!configured)return;
     const now=Date.now(), sl=secondsLeft(now), win=windowOf(now);
     const num=document.getElementById("cdNum"), txt=document.getElementById("cdText"), ring=document.getElementById("cdRing");
     if(num){num.textContent=sl;num.style.color=sl<=5?"var(--expire)":"#fff";}
     if(txt)txt.textContent=sl+"초";
+    const pl=document.getElementById("previewLink"); if(pl)pl.href=checkinUrl();
     if(ring){const RC=2*Math.PI*26,frac=Math.max(0,Math.min(1,sl/QR_INTERVAL));ring.setAttribute("stroke-dasharray",RC);ring.setAttribute("stroke-dashoffset",RC*(1-frac));ring.setAttribute("stroke",sl<=5?"var(--expire)":"var(--amber)");}
     if(win!==st.lastWindow){ st.lastWindow=win; const frame=document.getElementById("qrFrame");
       if(frame)frame.innerHTML=realQrSvg(checkinUrl())+'<div class="qr-refresh">'+ic("refresh-cw")+' 새 코드</div>'; refreshIcons(); }
@@ -713,7 +735,9 @@ function runCheckin(){
 
   if(!configured){ cs.step="config"; render(); }
   else {
-    auth.getRedirectResult().then(r=>{
+    db.ref(DBROOT+"/event").once("value").then(s=>{ curEvent=Object.assign({}, EV, s.val()||{}); }).catch(()=>{}).then(()=>{
+      return auth.getRedirectResult();
+    }).then(r=>{
       if(r && r.user){ cs.user=r.user; cs.name=r.user.displayName||""; cs.step="form"; render(); }
       else { cs.step=validate(); render(); }
     }).catch(()=>{ cs.step=validate(); render(); });
@@ -722,14 +746,20 @@ function runCheckin(){
   function doLogin(){
     cs.err=null;
     const provider=new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).then(res=>{
-      cs.user=res.user; cs.name=res.user.displayName||""; cs.step="form"; render();
-    }).catch(err=>{
+    cs.step="init"; render();               // 즉시 '잠시만요' 표시로 반응 확인
+    Promise.resolve().then(()=>auth.signInWithRedirect(provider)).catch(err=>{
       const code=err&&err.code;
-      if(code==="auth/popup-closed-by-user"||code==="auth/cancelled-popup-request"){ cs.err="로그인 창이 닫혔어요. 다시 시도해 주세요."; return render(); }
-      if(code==="auth/popup-blocked"||code==="auth/operation-not-supported-in-this-environment"){ auth.signInWithRedirect(provider); return; }
-      if(code==="auth/unauthorized-domain"){ cs.err="이 주소가 Firebase 승인 도메인에 없어요. 운영자에게 문의하세요."; return render(); }
-      cs.err="로그인에 실패했어요. 다시 시도해 주세요."; render();
+      // 리다이렉트가 불가한 환경이면 팝업으로 폴백
+      auth.signInWithPopup(provider).then(res=>{
+        cs.user=res.user; cs.name=res.user.displayName||""; cs.step="form"; render();
+      }).catch(err2=>{
+        const c2=err2&&err2.code;
+        if(c2==="auth/unauthorized-domain") cs.err="이 주소가 Firebase 승인 도메인에 등록되지 않았어요. (승인된 도메인에 이 사이트 주소를 추가해 주세요)";
+        else if(c2==="auth/operation-not-allowed") cs.err="구글 로그인이 사용 설정되어 있지 않아요.";
+        else if(c2==="auth/popup-closed-by-user"||c2==="auth/cancelled-popup-request") cs.err="로그인 창이 닫혔어요. 다시 시도해 주세요.";
+        else cs.err="로그인에 실패했어요: "+(c2||code||"알 수 없는 오류");
+        cs.step="auth"; render();
+      });
     });
   }
 
@@ -747,14 +777,14 @@ function runCheckin(){
     } else if(cs.step==="auth"){
       inner='<div class="ci-card"><div class="ci-brand">'+ic("qr-code")+' 출첵</div>'+
         '<div class="scanned-tag '+(mode==="in"?"st-in":"st-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석":"퇴실")+' 인증 · '+esc(t)+'</div>'+
-        '<h2>'+esc(EV.name)+'</h2><p class="ci-sub">'+EV.place+' · '+EV.time+'</p>'+
+        '<h2>'+esc(curEvent.name)+'</h2><p class="ci-sub">'+esc(curEvent.place)+' · '+esc(curEvent.time)+'</p>'+
         '<p class="ci-sub" style="margin-top:6px">대리출석 방지를 위해 <b>구글 로그인</b>으로 본인 확인이 필요해요.</p>'+
         (cs.err?'<div class="pnote err">'+ic("x-circle")+' '+esc(cs.err)+'</div>':"")+
         '<button class="google-btn" id="ciLogin">'+googleG()+'<span>Google 계정으로 로그인</span></button></div>';
     } else if(cs.step==="form"){
       inner='<div class="ci-card"><div class="ci-brand">'+ic("qr-code")+' 출첵</div>'+
         '<div class="scanned-tag '+(mode==="in"?"st-in":"st-out")+'">'+(mode==="in"?ic("log-in"):ic("log-out"))+' '+(mode==="in"?"출석":"퇴실")+' 인증</div>'+
-        '<h2>'+esc(EV.name)+'</h2>'+
+        '<h2>'+esc(curEvent.name)+'</h2>'+
         '<div class="who-badge">'+ic("user-check")+' '+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' 님으로 로그인됨</div>'+
         '<div class="field"><label>'+ic("id-card")+' 사번</label><input id="ciSabun" value="'+esc(cs.sabun)+'" placeholder="예: EMP-1043"/>'+
           '<span class="field-hint">본인 사번을 입력하세요</span></div>'+
@@ -767,24 +797,19 @@ function runCheckin(){
         '<button class="ox-btn '+(sel===true?"on-o":"")+'" data-quiz="'+i+'" data-ans="1">O</button>'+
         '<button class="ox-btn '+(sel===false?"on-x":"")+'" data-quiz="'+i+'" data-ans="0">X</button></div></div>';}).join("");
       const quizDone=QUIZ.every((q,i)=>tk.quiz[i]!==undefined);
-      const can=isTrain?(tk.rating>0&&quizDone):(tk.rating>0);
-      inner='<div class="ci-card task-step"><div class="task-banner">'+ic("check-circle-2")+' '+(cs.result.mode==="out"?"퇴실 완료":(isTrain?"출석 완료":"참석 완료"))+' · '+fmt(cs.result.at)+'</div>'+
-        '<h2>후속 작업</h2><p class="ci-sub">'+(isTrain?"아래 항목을 완료해 주세요":"만족도 조사에 참여해 주세요")+'</p>'+
-        '<div class="task-card"><div class="tc-head">'+ic("smile")+' 만족도 <span class="req">필수</span></div><div class="stars">'+stars+'</div>'+
-          '<input class="task-input" id="tkComment" placeholder="한 줄 의견 (선택)" value="'+esc(tk.comment)+'"/></div>'+
-        (isTrain?'<div class="task-card"><div class="tc-head">'+ic("paperclip")+' 과제·자료 제출</div><input class="task-input" id="tkAssign" placeholder="링크 또는 메모" value="'+esc(tk.assignment)+'"/>'+
-          '<input type="file" id="tkFileInput" style="display:none"/>'+
-          '<button class="attach-btn'+(tk.fileName?" has-file":"")+'" id="tkFile">'+
-          (tk.uploading? ic("loader")+" 업로드 중..." : tk.fileName? (ic("check")+" "+esc(tk.fileName)+(DRIVE_UPLOAD_URL?(tk.uploaded?" · 업로드됨":(tk.uploadErr?" · 실패":"")):"")) : ic("upload")+" 파일 첨부")+
-          '</button></div>':"")+
-        (isTrain?'<div class="task-card"><div class="tc-head">'+ic("list-checks")+' 간단 퀴즈 <span class="req">필수</span></div>'+quizBlocks+'</div>':"")+
+      const can=tk.rating>0;
+      inner='<div class="ci-card task-step"><div class="task-banner">'+ic("check-circle-2")+' 퇴실 완료 · '+fmt(cs.result.at)+'</div>'+
+        '<h2>참여해주셔서 감사합니다.</h2><p class="ci-sub">만족도와 참여소감을 남겨주세요</p>'+
+        '<div class="task-card"><div class="tc-head">'+ic("smile")+' 만족도 <span class="req">필수</span></div><div class="stars">'+stars+'</div></div>'+
+        '<div class="task-card"><div class="tc-head">'+ic("message-square")+' 참여소감 <span class="opt">선택</span></div>'+
+          '<textarea class="task-input task-area" id="tkComment" rows="3" placeholder="오늘 미팅 참여소감을 남겨주세요">'+esc(tk.comment)+'</textarea></div>'+
         '<button class="pbtn primary" id="tkSubmit" '+(can?"":"disabled")+'>'+ic("send")+' 제출하기</button></div>';
     } else if(cs.step==="done"){
       const r=cs.result, sub=cs.submitted;
       inner='<div class="ci-card done-step"><div class="done-ic '+(r.mode==="in"?"d-in":"d-out")+'">'+ic("check-circle-2")+'</div>'+
         '<h2>'+(r.mode==="out"?"퇴실 완료!":(type==="training"?"출석 완료!":"참석 완료!"))+'</h2>'+
         '<div class="done-time">'+fmt(r.at)+'</div><div class="done-who">'+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' · '+esc(cs.sabun)+'</div>'+
-        (sub?'<div class="done-sub">'+ic("check-circle-2")+' 후속 작업 제출 완료 · 만족도 ★'+sub.rating+(sub.quizTotal?' · 퀴즈 '+sub.quizScore+'/'+sub.quizTotal:'')+'</div>':"")+
+        (sub?'<div class="done-sub">'+ic("check-circle-2")+' 소중한 의견 감사합니다 · 만족도 ★'+sub.rating+'</div>':"")+
         '<p class="ci-sub">운영자 화면에 실시간으로 반영됐어요. 창을 닫으셔도 됩니다.</p></div>';
     }
     app.innerHTML='<div class="checkin-wrap">'+inner+'</div>';
@@ -852,16 +877,11 @@ function runCheckin(){
   }
 
   function submitTask(){
-    const isTrain=type==="training"; let score=0;
-    if(isTrain)QUIZ.forEach((q,i)=>{if(cs.task.quiz[i]===q.a)score++;});
     const sub={rating:cs.task.rating,comment:cs.task.comment,
-      assignment:isTrain?cs.task.assignment:"",fileName:isTrain?cs.task.fileName:"",
-      quizScore:isTrain?score:0,quizTotal:isTrain?QUIZ.length:0};
+      assignment:"",fileName:"",quizScore:0,quizTotal:0};
     db.ref(DBROOT+"/submissions/"+cs.user.uid).set(sub).then(()=>{cs.submitted=sub;cs.step="done";render();})
       .catch(()=>{cs.submitted=sub;cs.step="done";render();});
   }
 }
 
-</script>
-</body>
-</html>
+</script></body></html>
