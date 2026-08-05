@@ -543,6 +543,7 @@ function runOperator(){
   if(configured){
     db.ref(DBROOT+"/event").on("value",s=>{ curEvent=Object.assign({}, EV, s.val()||{}); renderOp(); });
     db.ref(DBROOT+"/mode").on("value",s=>{ const m=s.val(); if((m==="in"||m==="out")&&m!==st.adminMode){ st.adminMode=m; renderOp(); } });
+    db.ref(DBROOT+"/roster").on("value",s=>{ const r=s.val(); const arr=Array.isArray(r)?r:(r&&typeof r==="object"?Object.values(r):[]); if(arr.length){ st.roster=arr; renderOp(); } });
     db.ref(DBROOT+"/attendance").on("value",s=>{ st.attendance=s.val()||{}; renderOp(); });
     db.ref(DBROOT+"/submissions").on("value",s=>{ st.submissions=s.val()||{}; renderOp(); });
   }
@@ -691,7 +692,7 @@ function runOperator(){
         dept:pick(o,["부서","팀","소속","dept","department"]),phone:pick(o,["연락처","전화번호","휴대폰","핸드폰","phone","mobile"])}))
         .filter(r=>r.empId&&r.name);
       if(!list.length)toast("error","명단을 읽지 못했어요. 사번·이름 열 확인.");
-      else{ st.roster=list; st.preNotify="scheduled"; renderOp(); toast("success","명단 "+list.length+"명 등록 · 안내문자 "+preNotifyTime()+" 예약됨."); }
+      else{ st.roster=list; db.ref(DBROOT+"/roster").set(list).catch(()=>{}); st.preNotify="scheduled"; renderOp(); toast("success","명단 "+list.length+"명 등록 · 안내문자 "+preNotifyTime()+" 예약됨."); }
     }catch(e){toast("error","파일 열기 실패. .xlsx 형식 확인.");}
     finally{ev.target.value="";}
   }
@@ -791,8 +792,10 @@ function runOperator(){
    ========================================================================== */
 function runCheckin(){
   const w=+params.get("w"), t=params.get("t"), mode=params.get("m")||"in", type=params.get("ty")||"training";
-  const cs = { step:"init", user:null, name:"", sabun:"", err:null, result:null, submitted:null,
+  const cs = { step:"init", user:null, name:"", sabun:"", gname:"", needName:false, err:null, result:null, submitted:null,
     task:{rating:0,comment:"",assignment:"",fileName:"",quiz:{}} };
+  let rosterIds=new Set(), rosterMap={};
+  function rosterArr(v){ return Array.isArray(v)?v:(v&&typeof v==="object"?Object.values(v):[]); }
 
   function tokenOkLive(live){
     const authentic = tokenCode(EVENTID+"|"+mode+"|"+w)===t;   // 토큰이 그 창의 진짜 토큰인지
@@ -807,8 +810,9 @@ function runCheckin(){
 
   if(!configured){ cs.step="config"; render(); }
   else {
-    Promise.all([ db.ref(DBROOT+"/event").once("value"), db.ref(DBROOT+"/live").once("value") ])
-      .then(([es,ls])=>{ curEvent=Object.assign({}, EV, es.val()||{});
+    Promise.all([ db.ref(DBROOT+"/event").once("value"), db.ref(DBROOT+"/live").once("value"), db.ref(DBROOT+"/roster").once("value") ])
+      .then(([es,ls,rs])=>{ curEvent=Object.assign({}, EV, es.val()||{});
+        rosterArr(rs.val()).forEach(x=>{ const id=String(x.empId||"").trim().toUpperCase(); if(id){ rosterIds.add(id); rosterMap[id]=x.name||""; } });
         cs.step = tokenOkLive(ls.val()) ? "auth" : "expired"; render(); })
       .catch(()=>{ cs.step = tokenOkLive(null) ? "auth" : "expired"; render(); });
   }
@@ -854,6 +858,8 @@ function runCheckin(){
         '<div class="who-badge">'+ic("user-check")+' '+esc(cs.user?(cs.user.displayName||cs.user.email):cs.name)+' 님으로 로그인됨</div>'+
         '<div class="field"><label>'+ic("id-card")+' 사번</label><input id="ciSabun" value="'+esc(cs.sabun)+'" placeholder="예: 00000000 (8자리)"/>'+
           '<span class="field-hint">본인 사번(숫자)을 입력하세요</span></div>'+
+        (cs.needName?'<div class="field"><label>'+ic("user")+' 이름</label><input id="ciName" value="'+esc(cs.gname)+'" placeholder="이름을 입력하세요"/>'+
+          '<span class="field-hint">명단에 없는 사번이에요. 이름을 입력해 주세요.</span></div>':"")+
         (cs.err?'<div class="pnote err">'+ic("x-circle")+' '+esc(cs.err)+'</div>':"")+
         '<button class="pbtn '+(mode==="in"?"primary":"primary-out")+'" id="ciSubmit">'+(mode==="in"?ic("log-in")+" 출석하기":ic("log-out")+" 퇴실하기")+'</button></div>';
     } else if(cs.step==="task"){
@@ -887,6 +893,7 @@ function runCheckin(){
       const lg=document.getElementById("ciLogin"); if(lg)lg.onclick=doLogin;
     } else if(cs.step==="form"){
       const sb=document.getElementById("ciSabun"); if(sb)sb.addEventListener("input",e=>cs.sabun=e.target.value.toUpperCase());
+      const nm=document.getElementById("ciName"); if(nm)nm.addEventListener("input",e=>cs.gname=e.target.value);
       const btn=document.getElementById("ciSubmit"); if(btn)btn.onclick=submit;
     } else if(cs.step==="task"){
       document.querySelectorAll("[data-star]").forEach(b=>b.onclick=()=>{cs.task.rating=+b.dataset.star;render();});
@@ -905,19 +912,27 @@ function runCheckin(){
     if(!cs.user){cs.err="구글 로그인이 필요해요.";cs.step="auth";return render();}
     const sabun=cs.sabun.trim().toUpperCase();
     if(!sabun){cs.err="사번을 입력해 주세요.";return render();}
+    const inRoster=rosterIds.has(sabun);
+    if(!inRoster){
+      cs.needName=true;
+      if(!(cs.gname||"").trim()){ cs.err="명단에 없는 사번이에요. 이름을 입력해 주세요."; return render(); }
+    }
+    const resolvedName = inRoster ? (rosterMap[sabun]||cs.user.displayName||cs.name||"")
+                                  : (cs.gname||"").trim();
     const uid=cs.user.uid;
     const ref=db.ref(DBROOT+"/attendance/"+uid);
     ref.once("value").then(snap=>{
       const rec=snap.val();
       if(mode==="in"){
         if(rec&&rec.checkInAt){cs.err="이미 "+fmt(rec.checkInAt)+"에 출석하셨어요. 한 계정은 다시 출석할 수 없어요.";return render();}
-        const entry={uid:uid,email:cs.user.email||"",name:cs.user.displayName||cs.name||"",empId:sabun,checkInAt:Date.now(),checkOutAt:null};
+        const entry={uid:uid,email:cs.user.email||"",name:resolvedName,guest:!inRoster,empId:sabun,checkInAt:Date.now(),checkOutAt:null};
         ref.set(entry).then(()=>{ cs.result={mode:"in",at:entry.checkInAt};
           cs.step=(type==="general")?"task":"done"; render(); });
       } else {
         if(!rec||!rec.checkInAt){cs.err="출석 기록이 없어요. 먼저 출석 QR로 체크인해 주세요.";return render();}
         if(rec.checkOutAt){cs.err="이미 "+fmt(rec.checkOutAt)+"에 퇴실하셨어요.";return render();}
-        ref.update({checkOutAt:Date.now(),empId:sabun}).then(()=>{ cs.result={mode:"out",at:Date.now()};
+        const upd={checkOutAt:Date.now(),empId:sabun}; if(!rec.name&&resolvedName)upd.name=resolvedName;
+        ref.update(upd).then(()=>{ cs.result={mode:"out",at:Date.now()};
           cs.step=(type==="training")?"task":"done"; render(); });
       }
     }).catch(()=>{cs.err="네트워크 오류예요. 잠시 후 다시 시도해 주세요.";render();});
